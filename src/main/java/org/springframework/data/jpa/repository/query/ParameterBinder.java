@@ -106,7 +106,7 @@ public class ParameterBinder {
 
 			if (canBindParameter(parameter)) {
 
-				Object value = computeParameterValue(parameter, values[methodParameterPosition], values);
+				Object value = values[methodParameterPosition];
 
 				bind(query, parameter, value, queryParameterPosition++);
 			}
@@ -125,19 +125,6 @@ public class ParameterBinder {
 	 */
 	protected boolean canBindParameter(JpaParameter parameter) {
 		return parameter.isBindable();
-	}
-
-	/**
-	 * Computes the value to bind for the given {@link JpaParameter} and the given {@code value} by potentially using the
-	 * other {@code values}. This is intended to be customized in sub-classes.
-	 * 
-	 * @param parameter
-	 * @param value
-	 * @param values
-	 * @return
-	 */
-	private Object computeParameterValue(JpaParameter parameter, Object value, Object[] values) {
-		return value;
 	}
 
 	/**

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2011 the original author or authors.
+ * Copyright 2008-2014 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.Serializable;
 
 import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Unit test for {@code JpaRepositoryFactory}.
  * 
  * @author Oliver Gierke
+ * @author Thomas Darimont
  */
 @RunWith(MockitoJUnitRunner.class)
 public class JpaRepositoryFactoryUnitTests {
@@ -50,10 +52,15 @@ public class JpaRepositoryFactoryUnitTests {
 	JpaRepositoryFactory factory;
 
 	@Mock EntityManager entityManager;
-	@Mock @SuppressWarnings("rawtypes") JpaEntityInformation metadata;
+	@Mock @SuppressWarnings("rawtypes") JpaEntityInformation entityInformation;
+	@Mock EntityManagerFactory emf;
 
 	@Before
 	public void setUp() {
+
+		when(entityManager.getEntityManagerFactory()).thenReturn(emf);
+		when(entityManager.getDelegate()).thenReturn(entityManager);
+		when(emf.createEntityManager()).thenReturn(entityManager);
 
 		// Setup standard factory configuration
 		factory = new JpaRepositoryFactory(entityManager) {
@@ -61,8 +68,7 @@ public class JpaRepositoryFactoryUnitTests {
 			@Override
 			@SuppressWarnings("unchecked")
 			public <T, ID extends Serializable> JpaEntityInformation<T, ID> getEntityInformation(Class<T> domainClass) {
-
-				return metadata;
+				return entityInformation;
 			};
 		};
 
@@ -134,7 +140,7 @@ public class JpaRepositoryFactoryUnitTests {
 	@Test
 	public void usesQueryDslRepositoryIfInterfaceImplementsExecutor() {
 
-		when(metadata.getJavaType()).thenReturn(User.class);
+		when(entityInformation.getJavaType()).thenReturn(User.class);
 		assertEquals(QueryDslJpaRepository.class,
 				factory.getRepositoryBaseClass(new DefaultRepositoryMetadata(QueryDslSampleRepository.class)));
 

@@ -507,7 +507,7 @@ public class UserRepositoryTests {
 
 		Page<User> users = repository.findAll(spec, new PageRequest(0, 1));
 		assertThat(users.getSize(), is(1));
-		assertThat(users.hasPreviousPage(), is(false));
+		assertThat(users.hasPrevious(), is(false));
 		assertThat(users.getTotalElements(), is(2L));
 	}
 
@@ -1751,6 +1751,69 @@ public class UserRepositoryTests {
 		assertThat(users.getContent(), hasSize(2));
 		assertThat(users.getContent().get(0), is(thirdUser));
 		assertThat(users.getContent().get(1), is(fourthUser));
+	}
+
+	/**
+	 * @see DATAJPA-629
+	 */
+	@Test
+	public void shouldfindUsersBySpELExpressionParametersWithSpelTemplateExpression() {
+
+		flushTestUsers();
+		List<User> users = repository.findUsersByFirstnameForSpELExpressionWithParameterIndexOnlyWithEntityExpression(
+				"Joachim", "Arrasz");
+
+		assertThat(users, hasSize(1));
+		assertThat(users.get(0), is(secondUser));
+	}
+
+	/**
+	 * @see DATAJPA-606
+	 */
+	@Test
+	public void findByEmptyCollectionOfStrings() throws Exception {
+
+		flushTestUsers();
+
+		List<User> users = repository.findByAttributesIn(new HashSet<String>());
+		assertThat(users, hasSize(0));
+	}
+
+	/**
+	 * @see DATAJPA-606
+	 */
+	@Test
+	public void findByEmptyCollectionOfIntegers() throws Exception {
+
+		flushTestUsers();
+
+		List<User> users = repository.findByAgeIn(Arrays.<Integer> asList());
+		assertThat(users, hasSize(0));
+	}
+
+	/**
+	 * @see DATAJPA-606
+	 */
+	@Test
+	public void findByEmptyArrayOfIntegers() throws Exception {
+
+		flushTestUsers();
+
+		List<User> users = repository.queryByAgeIn(new Integer[0]);
+		assertThat(users, hasSize(0));
+	}
+
+	/**
+	 * @see DATAJPA-606
+	 */
+	@Test
+	public void findByAgeWithEmptyArrayOfIntegersOrFirstName() {
+
+		flushTestUsers();
+
+		List<User> users = repository.queryByAgeInOrFirstname(new Integer[0], secondUser.getFirstname());
+		assertThat(users, hasSize(1));
+		assertThat(users.get(0), is(secondUser));
 	}
 
 	private Page<User> executeSpecWithSort(Sort sort) {

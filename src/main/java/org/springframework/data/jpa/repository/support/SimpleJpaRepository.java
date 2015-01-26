@@ -42,8 +42,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.provider.PersistenceProvider;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.query.Jpa21Utils;
 import org.springframework.data.jpa.repository.query.QueryUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,11 +66,13 @@ import org.springframework.util.Assert;
 public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepository<T, ID>,
 		JpaSpecificationExecutor<T> {
 
+	private static final String ID_MUST_NOT_BE_NULL = "The given id must not be null!";
+
 	private final JpaEntityInformation<T, ?> entityInformation;
 	private final EntityManager em;
 	private final PersistenceProvider provider;
 
-	private CrudMethodMetadata crudMethodMetadata;
+	private CrudMethodMetadata metadata;
 
 	/**
 	 * Creates a new {@link SimpleJpaRepository} to manage objects of the given {@link JpaEntityInformation}.
@@ -93,7 +97,7 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 	 * @param em must not be {@literal null}.
 	 */
 	public SimpleJpaRepository(Class<T> domainClass, EntityManager em) {
-		this(JpaEntityInformationSupport.getMetadata(domainClass, em), em);
+		this(JpaEntityInformationSupport.getEntityInformation(domainClass, em), em);
 	}
 
 	/**
@@ -103,7 +107,11 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 	 * @param crudMethodMetadata
 	 */
 	public void setRepositoryMethodMetadata(CrudMethodMetadata crudMethodMetadata) {
-		this.crudMethodMetadata = crudMethodMetadata;
+		this.metadata = crudMethodMetadata;
+	}
+
+	protected CrudMethodMetadata getRepositoryMethodMetadata() {
+		return metadata;
 	}
 
 	protected Class<T> getDomainClass() {
@@ -127,7 +135,7 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 	@Transactional
 	public void delete(ID id) {
 
-		Assert.notNull(id, "The given id must not be null!");
+		Assert.notNull(id, ID_MUST_NOT_BE_NULL);
 
 		T entity = findOne(id);
 
@@ -208,16 +216,16 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 	 */
 	public T findOne(ID id) {
 
-		Assert.notNull(id, "The given id must not be null!");
+		Assert.notNull(id, ID_MUST_NOT_BE_NULL);
 
 		Class<T> domainType = getDomainClass();
 
-		if (crudMethodMetadata == null) {
+		if (metadata == null) {
 			return em.find(domainType, id);
 		}
 
-		LockModeType type = crudMethodMetadata.getLockModeType();
-		Map<String, Object> hints = crudMethodMetadata.getQueryHints();
+		LockModeType type = metadata.getLockModeType();
+		Map<String, Object> hints = metadata.getQueryHints();
 
 		return type == null ? em.find(domainType, id, hints) : em.find(domainType, id, type, hints);
 	}
@@ -229,7 +237,7 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 	@Override
 	public T getOne(ID id) {
 
-		Assert.notNull(id, "The given id must not be null!");
+		Assert.notNull(id, ID_MUST_NOT_BE_NULL);
 		return em.getReference(getDomainClass(), id);
 	}
 
@@ -239,7 +247,7 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 	 */
 	public boolean exists(ID id) {
 
-		Assert.notNull(id, "The given id must not be null!");
+		Assert.notNull(id, ID_MUST_NOT_BE_NULL);
 
 		if (entityInformation.getIdAttribute() == null) {
 			return findOne(id) != null;
@@ -294,7 +302,18 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 			return Collections.emptyList();
 		}
 
-		ByIdsSpecification specification = new ByIdsSpecification();
+		if (entityInformation.hasCompositeId()) {
+
+			List<T> results = new ArrayList<T>();
+
+			for (ID id : ids) {
+				results.add(findOne(id));
+			}
+
+			return results;
+		}
+
+		ByIdsSpecification<T> specification = new ByIdsSpecification<T>(entityInformation);
 		TypedQuery<T> query = getQuery(specification, (Sort) null);
 
 		return query.setParameter(specification.parameter, ids).getResultList();
@@ -541,18 +560,18 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 
 	private TypedQuery<T> applyRepositoryMethodMetadata(TypedQuery<T> query) {
 
-		if (crudMethodMetadata == null) {
+		if (metadata == null) {
 			return query;
 		}
 
-		LockModeType type = crudMethodMetadata.getLockModeType();
+		LockModeType type = metadata.getLockModeType();
 		TypedQuery<T> toReturn = type == null ? query : query.setLockMode(type);
 
-		for (Entry<String, Object> hint : crudMethodMetadata.getQueryHints().entrySet()) {
+		for (Entry<String, Object> hint : metadata.getQueryHints().entrySet()) {
 			query.setHint(hint.getKey(), hint.getValue());
 		}
 
-		return toReturn;
+		return Jpa21Utils.tryConfigureFetchGraph(em, toReturn, metadata.getEntityGraph());
 	}
 
 	/**
@@ -564,9 +583,15 @@ public class SimpleJpaRepository<T, ID extends Serializable> implements JpaRepos
 	 * @author Oliver Gierke
 	 */
 	@SuppressWarnings("rawtypes")
-	private final class ByIdsSpecification implements Specification<T> {
+	private static final class ByIdsSpecification<T> implements Specification<T> {
+
+		private final JpaEntityInformation<T, ?> entityInformation;
 
 		ParameterExpression<Iterable> parameter;
+
+		public ByIdsSpecification(JpaEntityInformation<T, ?> entityInformation) {
+			this.entityInformation = entityInformation;
+		}
 
 		/*
 		 * (non-Javadoc)

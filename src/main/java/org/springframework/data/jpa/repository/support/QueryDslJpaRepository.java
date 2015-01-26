@@ -18,18 +18,24 @@ package org.springframework.data.jpa.repository.support;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map.Entry;
 
+import javax.persistence.EntityGraph;
 import javax.persistence.EntityManager;
+import javax.persistence.LockModeType;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.query.Jpa21Utils;
+import org.springframework.data.jpa.repository.query.JpaEntityGraph;
 import org.springframework.data.querydsl.EntityPathResolver;
 import org.springframework.data.querydsl.QSort;
 import org.springframework.data.querydsl.QueryDslPredicateExecutor;
 import org.springframework.data.querydsl.SimpleEntityPathResolver;
 
 import com.mysema.query.jpa.JPQLQuery;
+import com.mysema.query.jpa.impl.JPAQuery;
 import com.mysema.query.types.EntityPath;
 import com.mysema.query.types.OrderSpecifier;
 import com.mysema.query.types.Predicate;
@@ -49,6 +55,7 @@ public class QueryDslJpaRepository<T, ID extends Serializable> extends SimpleJpa
 	private final EntityPath<T> path;
 	private final PathBuilder<T> builder;
 	private final Querydsl querydsl;
+	private final EntityManager em;
 
 	/**
 	 * Creates a new {@link QueryDslJpaRepository} from the given domain class and {@link EntityManager}. This will use
@@ -73,7 +80,7 @@ public class QueryDslJpaRepository<T, ID extends Serializable> extends SimpleJpa
 			EntityPathResolver resolver) {
 
 		super(entityInformation, entityManager);
-
+		this.em = entityManager;
 		this.path = resolver.createPath(entityInformation.getJavaType());
 		this.builder = new PathBuilder<T>(path.getType(), path.getMetadata());
 		this.querydsl = new Querydsl(entityManager, builder);
@@ -100,10 +107,16 @@ public class QueryDslJpaRepository<T, ID extends Serializable> extends SimpleJpa
 	 * @see org.springframework.data.querydsl.QueryDslPredicateExecutor#findAll(com.mysema.query.types.Predicate, com.mysema.query.types.OrderSpecifier<?>[])
 	 */
 	public List<T> findAll(Predicate predicate, OrderSpecifier<?>... orders) {
+		return executeSorted(createQuery(predicate), orders);
+	}
 
-		JPQLQuery query = createQuery(predicate);
-		query = querydsl.applySorting(new QSort(orders), query);
-		return query.list(path);
+	/* 
+	 * (non-Javadoc)
+	 * @see org.springframework.data.querydsl.QueryDslPredicateExecutor#findAll(com.mysema.query.types.OrderSpecifier[])
+	 */
+	@Override
+	public List<T> findAll(OrderSpecifier<?>... orders) {
+		return executeSorted(createQuery(new Predicate[0]), orders);
 	}
 
 	/*
@@ -136,6 +149,46 @@ public class QueryDslJpaRepository<T, ID extends Serializable> extends SimpleJpa
 	 * @return the Querydsl {@link JPQLQuery}.
 	 */
 	protected JPQLQuery createQuery(Predicate... predicate) {
-		return querydsl.createQuery(path).where(predicate);
+
+		JPAQuery query = querydsl.createQuery(path).where(predicate);
+		CrudMethodMetadata metadata = getRepositoryMethodMetadata();
+
+		if (metadata == null) {
+			return query;
+		}
+
+		LockModeType type = metadata.getLockModeType();
+		query = type == null ? query : query.setLockMode(type);
+
+		for (Entry<String, Object> hint : metadata.getQueryHints().entrySet()) {
+			query.setHint(hint.getKey(), hint.getValue());
+		}
+
+		JpaEntityGraph jpaEntityGraph = metadata.getEntityGraph();
+
+		if (jpaEntityGraph == null) {
+			return query;
+		}
+
+		EntityGraph<?> entityGraph = Jpa21Utils.tryGetFetchGraph(em, jpaEntityGraph);
+
+		if (entityGraph == null) {
+			return query;
+		}
+
+		query.setHint(jpaEntityGraph.getType().getKey(), entityGraph);
+
+		return query;
+	}
+
+	/**
+	 * Executes the given {@link JPQLQuery} after applying the given {@link OrderSpecifier}s.
+	 * 
+	 * @param query must not be {@literal null}.
+	 * @param orders must not be {@literal null}.
+	 * @return
+	 */
+	private List<T> executeSorted(JPQLQuery query, OrderSpecifier<?>... orders) {
+		return querydsl.applySorting(new QSort(orders), query).list(path);
 	}
 }

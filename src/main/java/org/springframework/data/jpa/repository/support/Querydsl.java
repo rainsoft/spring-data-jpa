@@ -22,6 +22,7 @@ import javax.persistence.EntityManager;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
+import org.springframework.data.jpa.provider.PersistenceProvider;
 import org.springframework.data.mapping.PropertyPath;
 import org.springframework.data.querydsl.QSort;
 import org.springframework.util.Assert;
@@ -30,6 +31,7 @@ import com.mysema.query.jpa.EclipseLinkTemplates;
 import com.mysema.query.jpa.HQLTemplates;
 import com.mysema.query.jpa.JPQLQuery;
 import com.mysema.query.jpa.OpenJPATemplates;
+import com.mysema.query.jpa.impl.AbstractJPAQuery;
 import com.mysema.query.jpa.impl.JPAQuery;
 import com.mysema.query.support.Expressions;
 import com.mysema.query.types.EntityPath;
@@ -72,7 +74,7 @@ public class Querydsl {
 	 * 
 	 * @return
 	 */
-	public JPQLQuery createQuery() {
+	public AbstractJPAQuery<JPAQuery> createQuery() {
 
 		switch (provider) {
 			case ECLIPSELINK:
@@ -92,7 +94,7 @@ public class Querydsl {
 	 * 
 	 * @return
 	 */
-	public JPQLQuery createQuery(EntityPath<?>... paths) {
+	public AbstractJPAQuery<JPAQuery> createQuery(EntityPath<?>... paths) {
 		return createQuery().from(paths);
 	}
 
@@ -163,7 +165,7 @@ public class Querydsl {
 		Assert.notNull(query, "Query must not be null!");
 
 		for (Order order : sort) {
-			query.orderBy(toOrderSpecifier(order, query));
+			query.orderBy(toOrderSpecifier(order));
 		}
 
 		return query;
@@ -176,7 +178,7 @@ public class Querydsl {
 	 * @return
 	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	private OrderSpecifier<?> toOrderSpecifier(Order order, JPQLQuery query) {
+	private OrderSpecifier<?> toOrderSpecifier(Order order) {
 
 		return new OrderSpecifier(order.isAscending() ? com.mysema.query.types.Order.ASC
 				: com.mysema.query.types.Order.DESC, buildOrderPropertyPathFrom(order),

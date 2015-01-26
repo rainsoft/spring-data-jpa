@@ -23,6 +23,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.EvaluationContextProvider;
 import org.springframework.data.repository.query.QueryMethod;
 import org.springframework.data.repository.query.RepositoryQuery;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
 
 /**
  * Factory to create the appropriate {@link RepositoryQuery} for a {@link JpaQueryMethod}.
@@ -33,6 +34,7 @@ enum JpaQueryFactory {
 
 	INSTANCE;
 
+	private static final SpelExpressionParser PARSER = new SpelExpressionParser();
 	private static final Logger LOG = LoggerFactory.getLogger(JpaQueryFactory.class);
 
 	/**
@@ -67,8 +69,8 @@ enum JpaQueryFactory {
 			return null;
 		}
 
-		return method.isNativeQuery() ? new NativeJpaQuery(method, em, queryString, evaluationContextProvider) : //
-				new SimpleJpaQuery(method, em, queryString, evaluationContextProvider);
+		return method.isNativeQuery() ? new NativeJpaQuery(method, em, queryString, evaluationContextProvider, PARSER) : //
+				new SimpleJpaQuery(method, em, queryString, evaluationContextProvider, PARSER);
 	}
 
 	/**

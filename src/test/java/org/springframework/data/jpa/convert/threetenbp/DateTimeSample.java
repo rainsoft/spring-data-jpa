@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 the original author or authors.
+ * Copyright 2014-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,21 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.data.jpa.repository.support;
+package org.springframework.data.jpa.convert.threetenbp;
 
-import org.springframework.data.repository.core.EntityMetadata;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+
+import org.threeten.bp.Instant;
+import org.threeten.bp.LocalDate;
+import org.threeten.bp.LocalDateTime;
+import org.threeten.bp.LocalTime;
 
 /**
- * JPA specific extension of {@link EntityMetadata}.
- * 
  * @author Oliver Gierke
  */
-public interface JpaEntityMetadata<T> extends EntityMetadata<T> {
+@Entity
+public class DateTimeSample {
 
-	/**
-	 * Returns the name of the entity.
-	 * 
-	 * @return
-	 */
-	String getEntityName();
+	@Id @GeneratedValue Long id;
+
+	Instant instant;
+	LocalDate localDate;
+	LocalTime localTime;
+	LocalDateTime localDateTime;
 }
